@@ -16,6 +16,7 @@ import os.path
 import bs4
 import gevent
 import gevent.monkey
+import unidecode
 import requests
 
 gevent.monkey.patch_all(httplib=True)
@@ -30,22 +31,8 @@ def download_playlist(url):
     if not os.path.exists(title):
         os.mkdir(title)
 
-    specialchar = {
-        u'ö': 'oe',
-        u'ä': 'ae',
-        u'ü': 'ue',
-        u'ù': 'u',
-        u'ï': 'i',
-        u'ì': 'i'
-    }
-
-    def replace_special_chars(string):
-        for old, new in specialchar.iteritems():
-            string = string.replace(old, new)
-        return string
-
     tracks = [
-        ('%s - %s (%s)' % tuple(replace_special_chars(tag.string.strip())
+        ('%s - %s (%s)' % tuple(unidecode.unidecode(tag.string.strip())
                                 .split(' / '))) for tag in 
         b.select("div.article_body p") if tag.string is not None
     ]
