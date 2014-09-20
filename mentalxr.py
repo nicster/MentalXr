@@ -1,11 +1,12 @@
 # coding=utf-8
 # @author: Nicolas Spycher, Simon Marti
-# @version: 1.0
+# @version: 1.0.1
 
 import re
 import os
 import sys
 import urllib
+import shutil
 import os.path
 import threading
 
@@ -22,7 +23,11 @@ if not os.path.exists(title):
 
 specialchar = {
     u'ö': 'oe',
+    u'ä': 'ae',
+    u'ü': 'ue',
+    u'ù': 'u',
     u'ï': 'i',
+    u'ì': 'i'
 }
 
 def replace_special_chars(string):
@@ -86,10 +91,18 @@ def download(track, counter=0):
     with open(os.path.join(title, track + '.mp3'), 'w') as f:
         f.write(r.content)
 
-for track in tracks:
-    threading.Thread(target=download, args=(track,)).start()
-
 def trackscore(track, searchterm):
     return abs(track['duration'] - 8 * 60)
 
+threads = []
+home = os.getenv("HOME")
 
+for track in tracks:
+    threads.append(threading.Thread(target=download, args=(track,)))
+
+[thread.start() for thread in threads]
+[thread.join() for thread in threads]
+print
+print 'Files have been downloaded and moved to ' + home + '/Downloads'
+
+shutil.move(title, os.getenv("HOME") + '/Downloads/' + title)
