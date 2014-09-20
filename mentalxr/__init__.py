@@ -12,10 +12,13 @@ import sys
 import urllib
 import shutil
 import os.path
-import threading
 
 import bs4
+import gevent
+import gevent.monkey
 import requests
+
+gevent.monkey.patch_all(httplib=True)
 
 
 def download_playlist(url):
@@ -47,14 +50,11 @@ def download_playlist(url):
         b.select("div.article_body p") if tag.string is not None
     ]
 
-    threads = []
     home = os.getenv("HOME")
 
-    for track in tracks:
-        threads.append(threading.Thread(target=download, args=(track, title)))
+    jobs = [gevent.spawn(download, track, title) for track in tracks]
+    gevent.joinall(jobs)
 
-    [thread.start() for thread in threads]
-    [thread.join() for thread in threads]
     print
     print 'Files have been downloaded and moved to ' + home + '/Downloads'
 

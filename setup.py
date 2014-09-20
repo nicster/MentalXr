@@ -17,7 +17,7 @@ setuptools.setup(
     zip_safe=True,
     author="Nicolas Spycher, Simon Marti",
     author_email="simon@marti.email",
-    install_requires=("requests", "beautifulsoup4"),
+    install_requires=("requests", "beautifulsoup4", "gevent", "grequests"),
     entry_points={
         'console_scripts': (
             "mentalxr = mentalxr:main",
