@@ -52,3 +52,12 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# Backup files
+*~
+*.orig
+
+# OS X
+.DS_Store
+.AppleDouble
+.LSOverride
