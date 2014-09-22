@@ -17,7 +17,7 @@ setuptools.setup(
     zip_safe=True,
     author="Nicolas Spycher, Simon Marti",
     author_email="simon@marti.email",
-    install_requires=("requests", "beautifulsoup4", "gevent",
+    install_requires=("requests>=2.4", "beautifulsoup4", "gevent>=1.0",
                       "grequests", "Unidecode"),
     entry_points={
         'console_scripts': (
