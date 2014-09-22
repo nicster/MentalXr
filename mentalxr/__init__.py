@@ -43,11 +43,11 @@ class Playlist(object):
     def extract_tracks(self, dom):
         for tag in dom.select("div.article_body p"):
             if tag.string is None:
-                return
+                continue
             data = unidecode.unidecode(tag.string.strip()).split(" / ")
-            if len(data) != 3:
-                return
-            yield Track(*data)
+            if len(data) < 3:
+                continue
+            yield Track(*data[:3])
 
     def extract_date(self, dom):
         match = re.search('\d+\. \w+ \d+', dom.title.string)
