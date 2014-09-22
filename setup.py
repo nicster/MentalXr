@@ -18,7 +18,8 @@ setuptools.setup(
     author="Nicolas Spycher, Simon Marti",
     author_email="simon@marti.email",
     install_requires=("requests>=2.4", "beautifulsoup4", "gevent>=1.0",
-                      "grequests", "Unidecode"),
+                      "grequests", "Unidecode", "blessings", "colorama",
+                      "humanize"),
     entry_points={
         'console_scripts': (
             "mentalxr = mentalxr:main",

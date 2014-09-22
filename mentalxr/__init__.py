@@ -17,12 +17,16 @@ import locale
 import urllib
 import os.path
 
-import bs4
-import gevent
 import unidecode
+import blessings
 import requests
+import colorama
+import humanize
+import gevent
+import bs4
 
 
+colorama.init()
 locale.setlocale(locale.LC_ALL, "de_DE")
 
 
@@ -53,19 +57,24 @@ class Playlist(object):
             return time.localtime()
 
     def download(self, destination):
-        destination = os.path.join(destination, repr(self))
+        destination = os.path.join(destination, str(self))
         if not os.path.exists(destination):
             os.makedirs(destination)
 
-        jobs = [gevent.spawn(track.download, destination)
+        progress_bar = MultiProgressBar()
+
+        jobs = [gevent.spawn(track.download, destination, progress_bar)
                 for track in self.tracks]
         gevent.joinall(jobs)
 
         print
         print "Files have been downloaded and moved to", destination
 
-    def __repr__(self):
+    def __str__(self):
         return time.strftime("Mental X - %d.%m.%Y", self.date)
+
+    def __repr__(self):
+        return time.strftime("Playlist(%d.%m.%Y)", self.date)
 
 
 class Track(object):
@@ -77,8 +86,12 @@ class Track(object):
         self.title = title
         self.mix = mix
 
-    def __repr__(self):
+    def __str__(self):
         return "%s - %s (%s)" % (self.artist, self.title, self.mix)
+
+    def __repr__(self):
+        return "Track(artist:%s, title:%s, mix:%s)" % (self.artist, self.title,
+                                                       self.mix)
 
     def searchterm(self):
         return "%s %s %s" % (self.artist, self.title, self.mix)
@@ -104,13 +117,15 @@ class Track(object):
             duration = self.parse_duration(tag.em.string)
             yield Download(self, artist, title, duration, url, r.url)
 
-    def download(self, destination):
+    def download(self, destination, progress_bar):
+        progress_bar = progress_bar.add_progress_bar(str(self))
+
         downloads = list(self.fetch_downloads())
         best = Download.pick_best(downloads)
         if best:
-            best.download(destination)
+            best.download(destination, progress_bar)
         else:
-            print "No download available for %s" % self
+            progress_bar.error("No suitable download available")
 
     @classmethod
     def parse_duration(cls, string):
@@ -121,6 +136,8 @@ class Track(object):
 
 
 class Download(object):
+    CHUNK_SIZE = 1024
+
     def __init__(self, track, artist, title, duration, url, referer):
         self.track = track
         self.artist = artist
@@ -132,13 +149,37 @@ class Download(object):
     def score(self):
         return abs(8 * 60 - self.duration)
 
-    def download(self, destination):
-        r = requests.get(self.url, headers={'referer': self.referer})
+    def download(self, destination, progress_bar):
+        r = requests.get(self.url, headers={'referer': self.referer},
+                         stream=True)
         if not r.ok:
-            r.raise_for_status()
+            progress_bar.error("Download failed with code %d" % r.status_code)
+            return
+
+        size = int(r.headers.get("content-length", 0))
+
+        if not size:
+            progress_bar.no_progress("Downloading (Unknown Size)")
+        else:
+            progress_bar.state = ("Starting downloading (%s)" %
+                                  humanize.naturalsize(size))
+
+        progress = 0
 
         with open(os.path.join(destination, "%s.mp3" % self.track), "w") as f:
-            f.write(r.content)
+            for chunk in r.iter_content(self.CHUNK_SIZE):
+                f.write(chunk)
+                progress += self.CHUNK_SIZE
+                if size:
+                    progress_bar.progress = progress / float(size)
+                    progress_bar.state = (
+                        "Downloading (%s / %s)" %
+                        (humanize.naturalsize(progress),
+                         humanize.naturalsize(size))
+                    )
+
+        progress_bar.done("Download complete (%s)" %
+                          humanize.naturalsize(size))
 
     def __repr__(self):
         return ("%s - %s (%d:%d)" % (
@@ -151,6 +192,134 @@ class Download(object):
             return None
         best = sorted(downloads, key=lambda t: t.score(), reverse=True)[0]
         return best if best.duration >= 4 * 60 else None
+
+    @staticmethod
+    def download_progress(progress, total):
+        return "%s/%s" % (humanize.naturalsize(progress),
+                          humanize.naturalsize(total))
+
+
+class MultiProgressBar(object):
+    def __init__(self):
+        self.terminal = blessings.Terminal()
+        self.enabled = self.terminal.is_a_tty
+        self.bars = []
+        self._size = (self.terminal.width, self.terminal.height)
+
+    def add_progress_bar(self, caption):
+        bar = ProgressBar(self, len(self.bars), caption)
+        self.bars.append(bar)
+
+        if self.enabled:
+            sys.stdout.write("\n")
+            bar.redraw()
+
+        return bar
+
+    def check_for_size_change(self):
+        if (self.terminal.width, self.terminal.height) != self._size:
+            self._size = (self.terminal.width, self.terminal.height)
+            sys.stdout.write(self.terminal.clear)
+            for bar in self.bars:
+                bar.redraw()
+
+    def y(self):
+        return self.terminal.height - len(self.bars) - 1
+
+
+class ProgressBar(object):
+    def __init__(self, parent, position, caption):
+        self.parent = parent
+        self.terminal = parent.terminal
+        self.position = position
+        self.caption = caption
+
+        self._state = ""
+        self._color = 6
+        self._progress = 0
+
+    def y(self):
+        return self.parent.y() + self.position
+
+    def redraw(self):
+        if not self.parent.enabled:
+            return
+
+        self.parent.check_for_size_change()
+
+        caption = self.caption
+        state = self._state
+
+        if len(caption) + 4 > self.terminal.width:
+            caption = caption[:self.terminal.width - 4]
+            state = ""
+        elif len(caption) + len(state) + 5 > self.terminal.width:
+            state = ""
+
+        line = "[ "
+        line += caption
+        line += " " * (self.terminal.width - len(caption) - len(state) - 4)
+        line += state
+        line += " ]"
+
+        if self.color and self._progress > 0:
+            end = int(len(line) * self._progress)
+            line = "".join((self.terminal.on_color(self._color),
+                            line[:end],
+                            self.terminal.normal,
+                            line[end:]))
+
+        with self.terminal.hidden_cursor():
+            with self.terminal.location(0, self.y()):
+                sys.stdout.write(line)
+
+    def error(self, message):
+        self._state = "Error: %s" % message
+        self._progress = 1
+        self._color = 1
+        self.redraw()
+
+    def no_progress(self, state=None):
+        if state:
+            self._state = state
+        self._color = 7
+        self._progress = 1
+        self.redraw()
+
+    def done(self, state=None):
+        if state:
+            self._state = state
+        self._color = 2
+        self.redraw()
+
+    @property
+    def progress(self):
+        return self._progress
+
+    @progress.setter
+    def progress(self, progress):
+        if self._progress == progress:
+            return
+        self._progress = max(0, min(1, progress))
+        self.redraw()
+
+    @property
+    def color(self):
+        return self._color
+
+    @color.setter
+    def color(self, color):
+        self._color = color
+        self.redraw()
+
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, state):
+        self._state = state
+        self.redraw()
 
 
 def main():
