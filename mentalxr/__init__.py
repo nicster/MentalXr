@@ -168,7 +168,7 @@ class Download(object):
         with open(os.path.join(destination, "%s.mp3" % self.track), "w") as f:
             for chunk in r.iter_content(self.CHUNK_SIZE):
                 f.write(chunk)
-                progress += self.CHUNK_SIZE
+                progress += len(chunk)
                 if size:
                     progressbar.progress = progress / float(size)
                     progressbar.state = (
@@ -178,7 +178,7 @@ class Download(object):
                     )
 
         progressbar.done("Download complete (%s)" %
-                          humanize.naturalsize(size))
+                          humanize.naturalsize(progress))
 
     def __repr__(self):
         return ("%s - %s (%d:%d)" % (
