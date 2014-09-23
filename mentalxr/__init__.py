@@ -44,7 +44,9 @@ class Playlist(object):
             if tag.string is None:
                 continue
             data = unidecode.unidecode(tag.string.strip()).split(" / ")
-            if len(data) < 3:
+            if len(data) == 2:
+                data.append("Original Mix")
+            elif len(data) < 2:
                 continue
             yield Track(*data[:3])
 
