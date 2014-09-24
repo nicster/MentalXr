@@ -65,7 +65,8 @@ class Playlist(object):
         progressbar = mentalxr.progressbar.MultiProgressBar()
 
         jobs = [gevent.spawn(track.download, destination, progressbar)
-                for track in self.tracks]
+                for track in self.tracks
+                if not os.path.exists(destination + '/' + str(track) + '.mp3')]
         gevent.joinall(jobs)
 
         print
