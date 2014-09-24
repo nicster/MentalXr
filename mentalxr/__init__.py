@@ -48,7 +48,9 @@ class Playlist(object):
                 data.append("Original Mix")
             elif len(data) < 2:
                 continue
-            yield Track(*data[:3])
+            elif len(data) == 3:
+                data.append(None)
+            yield Track(*data)
 
     def extract_date(self, dom):
         match = re.search('\d+\. \w+ \d+', dom.title.string)
@@ -83,20 +85,27 @@ class Track(object):
     VMUSICE_URL = "http://vmusice.net/mp3/%s"
     DURATION_PATTERN = re.compile("((\d+):)?(\d+):(\d+)")
 
-    def __init__(self, artist, title, mix):
+    def __init__(self, artist, title, mix, edit):
         self.artist = artist
         self.title = title
         self.mix = mix
+        if edit != None:
+            self.edit = ' / ' + edit
+        else:
+            self.edit = ''
 
     def __str__(self):
-        return "%s - %s (%s)" % (self.artist, self.title, self.mix)
+        return "%s - %s (%s%s)" % (self.artist, self.title, self.mix, 
+                                      self.edit)
 
     def __repr__(self):
-        return "Track(artist:%s, title:%s, mix:%s)" % (self.artist, self.title,
-                                                       self.mix)
+        return "Track(artist:%s, title:%s, mix:%s, edit: %s)" % (self.artist, 
+                                                                 self.title,
+                                                                 self.mix, 
+                                                                 self.edit)
 
     def searchterm(self):
-        return "%s %s %s" % (self.artist, self.title, self.mix)
+        return "%s %s %s %s" % (self.artist, self.title, self.mix, self.edit)
 
     def fetch_downloads(self):
         r = requests.get(self.VMUSICE_URL % urllib.quote(self.searchterm()))
@@ -117,7 +126,7 @@ class Track(object):
 
             url = tag.find("a", class_="download").get("href")
             duration = self.parse_duration(tag.em.string)
-            yield Download(self, artist, title, duration, url, r.url)
+            yield Download(self, artist, title, self.edit, duration, url, r.url)
 
     def download(self, destination, progressbar):
         progressbar = progressbar.add_progressbar(str(self))
@@ -140,10 +149,11 @@ class Track(object):
 class Download(object):
     CHUNK_SIZE = 1024
 
-    def __init__(self, track, artist, title, duration, url, referer):
+    def __init__(self, track, artist, title, edit, duration, url, referer):
         self.track = track
         self.artist = artist
         self.title = title
+        self.edit = edit
         self.duration = duration
         self.url = url
         self.referer = referer
@@ -184,8 +194,8 @@ class Download(object):
                           humanize.naturalsize(progress))
 
     def __repr__(self):
-        return ("%s - %s (%d:%d)" % (
-            self.artist, self.title, self.duration // 60, self.duration % 60)
+        return ("%s - %s (%s) (%d:%d)" % (
+            self.artist, self.title, self.edit, self.duration // 60, self.duration % 60)
         ).encode("utf-8")
 
     @classmethod
